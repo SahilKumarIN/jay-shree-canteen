@@ -34,6 +34,44 @@ import {
 import Footer from "../../components/Footer";
 import { db } from "../../configs/firebase.config";
 
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
+
+const LOGO_URL =
+  "https://res.cloudinary.com/dho0vgult/image/upload/v1780125981/jay_shree_canteen_logo_ij4dyc.png";
+
+const reportFilters = [
+  {
+    id: "today",
+    title: "Today",
+    days: 0,
+  },
+
+  {
+    id: "7days",
+    title: "Last 7 Days",
+    days: 7,
+  },
+
+  {
+    id: "30days",
+    title: "Last 30 Days",
+    days: 30,
+  },
+
+  {
+    id: "90days",
+    title: "Last 90 Days",
+    days: 90,
+  },
+
+  {
+    id: "all",
+    title: "All Time",
+    days: null,
+  },
+];
+
 const IndiUser = () => {
   const { userId } = useLocalSearchParams();
 
@@ -52,6 +90,8 @@ const IndiUser = () => {
   const [editingId, setEditingId] = useState("");
 
   const [newAmount, setNewAmount] = useState("");
+
+  const [reportLoading, setReportLoading] = useState("");
 
   // ================= FETCH USER DETAILS =================
   const fetchUserDetails = async () => {
@@ -139,6 +179,325 @@ const IndiUser = () => {
       console.log(error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const generateUserReport = async (filter) => {
+    try {
+      setReportLoading(filter.id);
+
+      const attendanceSnapshot = await getDocs(
+        query(collection(db, "attendance"), where("userId", "==", userId)),
+      );
+
+      const paymentSnapshot = await getDocs(
+        query(collection(db, "payments"), where("userId", "==", userId)),
+      );
+
+      let attendanceRows = "";
+      let paymentRows = "";
+
+      let reportMeals = 0;
+      let reportAmount = 0;
+      let reportPayments = 0;
+
+      attendanceSnapshot.forEach((doc) => {
+        const data = doc.data();
+
+        const createdDate = data.createdAt?.toDate();
+
+        let include = true;
+
+        if (filter.days !== null && createdDate) {
+          const cutoffDate = new Date();
+
+          if (filter.days === 0) {
+            cutoffDate.setHours(0, 0, 0, 0);
+          } else {
+            cutoffDate.setDate(cutoffDate.getDate() - filter.days);
+            cutoffDate.setHours(0, 0, 0, 0);
+          }
+
+          include = createdDate >= cutoffDate;
+        }
+
+        if (!include) return;
+
+        reportMeals++;
+
+        reportAmount += Number(data.mealPrice || 0);
+
+        attendanceRows += `
+        <tr>
+          <td>${data.date || "-"}</td>
+          <td style="text-transform:capitalize">
+            ${data.mealType || "-"}
+          </td>
+          <td>₹${data.mealPrice || 0}</td>
+        </tr>
+      `;
+      });
+
+      paymentSnapshot.forEach((doc) => {
+        const data = doc.data();
+
+        const createdDate = data.createdAt?.toDate();
+
+        let include = true;
+
+        if (filter.days !== null && createdDate) {
+          const cutoffDate = new Date();
+
+          if (filter.days === 0) {
+            cutoffDate.setHours(0, 0, 0, 0);
+          } else {
+            cutoffDate.setDate(cutoffDate.getDate() - filter.days);
+            cutoffDate.setHours(0, 0, 0, 0);
+          }
+
+          include = createdDate >= cutoffDate;
+        }
+
+        if (!include) return;
+
+        reportPayments += Number(data.amountPaid || 0);
+
+        paymentRows += `
+        <tr>
+          <td>
+            ${createdDate ? createdDate.toLocaleDateString() : "-"}
+          </td>
+          <td>
+            ${data.paymentType || "due_clearance"}
+          </td>
+          <td>
+            ₹${data.amountPaid || 0}
+          </td>
+        </tr>
+      `;
+      });
+
+      const html = `
+      <html>
+      <head>
+      <style>
+
+      *{
+        box-sizing:border-box;
+      }
+
+      body{
+        font-family:Arial, sans-serif;
+        padding:25px;
+        color:#111827;
+      }
+
+      .header{
+        text-align:center;
+        margin-bottom:20px;
+      }
+
+      .logo{
+        width:90px;
+        height:90px;
+        border-radius:45px;
+      }
+
+      .title{
+        font-size:28px;
+        color:#ec4899;
+        font-weight:bold;
+        margin-top:10px;
+      }
+
+      .subtitle{
+        color:#6b7280;
+      }
+
+      .summary{
+        background:#fdf2f8;
+        border:1px solid #fbcfe8;
+        border-radius:12px;
+        padding:20px;
+        margin-top:20px;
+      }
+
+      .summary p{
+        margin:6px 0;
+      }
+
+      .section{
+        margin-top:30px;
+      }
+
+      table{
+        width:100%;
+        border-collapse:collapse;
+        margin-top:15px;
+      }
+
+      thead{
+        display:table-header-group;
+      }
+
+      tr{
+        page-break-inside:avoid;
+      }
+
+      th{
+        background:#ec4899;
+        color:white;
+        padding:10px;
+        text-align:left;
+      }
+
+      td{
+        border:1px solid #e5e7eb;
+        padding:10px;
+      }
+
+      tr:nth-child(even){
+        background:#fafafa;
+      }
+
+      .footer{
+        margin-top:40px;
+        text-align:center;
+        color:#6b7280;
+        font-size:12px;
+        page-break-inside:avoid;
+      }
+
+      </style>
+      </head>
+
+      <body>
+
+        <div class="header">
+          <img src="${LOGO_URL}" class="logo" />
+
+          <div class="title">
+            JAY SHREE CATERERS
+          </div>
+
+          <div class="subtitle">
+            Individual User Report
+          </div>
+        </div>
+
+        <div class="summary">
+          <h2>${userData?.name || "-"}</h2>
+
+          <p>
+            <strong>Email:</strong>
+            ${userData?.email || "-"}
+          </p>
+
+          <p>
+            <strong>Report Filter:</strong>
+            ${filter.title}
+          </p>
+
+          <p>
+            <strong>Total Meals:</strong>
+            ${reportMeals}
+          </p>
+
+          <p>
+            <strong>Meal Amount:</strong>
+            ₹${reportAmount}
+          </p>
+
+          <p>
+            <strong>Payments During Period:</strong>
+            ₹${reportPayments}
+          </p>
+
+          <p>
+            <strong>Net Amount During Period:</strong>
+            ₹${reportAmount - reportPayments}
+          </p>
+
+          <p>
+            <strong>Current Outstanding Due:</strong>
+            ₹${totalAmount}
+          </p>
+        </div>
+
+        <div class="section">
+          <h2>Meal History</h2>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Meal</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              ${
+                attendanceRows ||
+                `
+                  <tr>
+                    <td colspan="3">
+                      No meal records found
+                    </td>
+                  </tr>
+                `
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="section">
+          <h2>Payment History</h2>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Payment Type</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              ${
+                paymentRows ||
+                `
+                  <tr>
+                    <td colspan="3">
+                      No payment records found
+                    </td>
+                  </tr>
+                `
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="footer">
+          Generated by Cygnite Studios •
+          Jay Shree Caterers
+        </div>
+
+      </body>
+      </html>
+    `;
+
+      const { uri } = await Print.printToFileAsync({
+        html,
+      });
+
+      await Sharing.shareAsync(uri);
+    } catch (error) {
+      console.log(error);
+
+      Alert.alert("Error", "Failed to generate report");
+    } finally {
+      setReportLoading("");
     }
   };
 
@@ -331,6 +690,39 @@ const IndiUser = () => {
               </View>
             </View>
           </LinearGradient>
+
+          <View className="px-6 mt-8">
+            <Text className="text-2xl font-bold text-gray-900">
+              User Reports
+            </Text>
+
+            <Text className="text-gray-500 mt-1">
+              Generate detailed reports for this user
+            </Text>
+          </View>
+
+          <View className="px-6 mt-5 gap-3">
+            {reportFilters.map((filter) => {
+              const isLoading = reportLoading === filter.id;
+
+              return (
+                <Pressable
+                  key={filter.id}
+                  disabled={!!reportLoading}
+                  onPress={() => generateUserReport(filter)}
+                  className="bg-pink-500 rounded-2xl py-4 items-center"
+                >
+                  {isLoading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text className="text-white font-bold">
+                      Download {filter.title} Report
+                    </Text>
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
 
           {/* CLEAR DUE BUTTON */}
           <View className="px-6 mt-6">

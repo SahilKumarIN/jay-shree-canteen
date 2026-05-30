@@ -275,6 +275,24 @@ const AdminHome = () => {
                 </View>
               </TouchableOpacity>
             </LinearGradient>
+            {/* REPORTS */}
+            <View className="flex-row px-6 mt-5 gap-4">
+              <TouchableOpacity
+                onPress={() => router.push("/user-lists")}
+                className="flex-1 bg-pink-500 rounded-2xl p-4 items-center"
+              >
+                <Ionicons name="people" size={24} color="white" />
+                <Text className="text-white font-semibold mt-2">Users</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => router.push("/report")}
+                className="flex-1 bg-blue-500 rounded-2xl p-4 items-center"
+              >
+                <Ionicons name="document-text" size={24} color="white" />
+                <Text className="text-white font-semibold mt-2">Reports</Text>
+              </TouchableOpacity>
+            </View>
 
             {/* TODAY STATS */}
             <View className="px-6 mt-8">

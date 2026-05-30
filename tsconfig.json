@@ -12,6 +12,7 @@
     ".expo/types/**/*.ts",
     "expo-env.d.ts",
     "nativewind-env.d.ts",
-    "app/(admin)/user-lists.jsx"
+    "app/(admin)/user-lists.jsx",
+    "app/(admin)/report.jsx"
   ]
 }

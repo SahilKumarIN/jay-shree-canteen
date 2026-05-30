@@ -7,6 +7,7 @@ const _layout = () => {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="indi-user" options={{ headerShown: false }} />
       <Stack.Screen name="user-lists" options={{ headerShown: false }} />
+      <Stack.Screen name="report" options={{ headerShown: false }} />
     </Stack>
   );
 };
