@@ -21,6 +21,7 @@ import { useLocalSearchParams } from "expo-router";
 
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -30,6 +31,7 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
+import { Modal } from "react-native";
 
 import Footer from "../../components/Footer";
 import { db } from "../../configs/firebase.config";
@@ -72,6 +74,29 @@ const reportFilters = [
   },
 ];
 
+const meals = [
+  {
+    label: "breakfast",
+    icon: "egg-fried",
+    price: 25,
+  },
+  {
+    label: "lunch",
+    icon: "food",
+    price: 35,
+  },
+  {
+    label: "snacks",
+    icon: "coffee",
+    price: 25,
+  },
+  {
+    label: "dinner",
+    icon: "silverware-fork-knife",
+    price: 35,
+  },
+];
+
 const IndiUser = () => {
   const { userId } = useLocalSearchParams();
 
@@ -92,6 +117,16 @@ const IndiUser = () => {
   const [newAmount, setNewAmount] = useState("");
 
   const [reportLoading, setReportLoading] = useState("");
+
+  const [showAddMealModal, setShowAddMealModal] = useState(false);
+
+  const [selectedMealType, setSelectedMealType] = useState(meals[0].label);
+
+  const [mealPrice, setMealPrice] = useState(String(meals[0].price));
+
+  const [mealDate, setMealDate] = useState(
+    new Date().toISOString().split("T")[0],
+  );
 
   // ================= FETCH USER DETAILS =================
   const fetchUserDetails = async () => {
@@ -501,6 +536,107 @@ const IndiUser = () => {
     }
   };
 
+  const handleAdminAddMeal = async () => {
+    try {
+      if (!mealPrice) {
+        Alert.alert("Error", "Please enter meal amount");
+
+        return;
+      }
+
+      const attendanceRef = doc(collection(db, "attendance"));
+
+      await setDoc(attendanceRef, {
+        attendanceId: attendanceRef.id,
+
+        userId,
+
+        userName: userData?.name || "",
+
+        userEmail: userData?.email || "",
+
+        mealType: selectedMealType,
+
+        mealPrice: Number(mealPrice),
+
+        date: mealDate,
+
+        markedByAdmin: true,
+
+        createdAt: serverTimestamp(),
+      });
+
+      await setDoc(doc(collection(db, "attendance-history")), {
+        type: "meal_added",
+
+        userId,
+
+        mealType: selectedMealType,
+
+        amount: Number(mealPrice),
+
+        date: mealDate,
+
+        createdAt: serverTimestamp(),
+      });
+
+      Alert.alert("Success", "Attendance added successfully");
+
+      setShowAddMealModal(false);
+
+      setMealPrice("");
+
+      fetchUserDetails();
+    } catch (error) {
+      console.log(error);
+
+      Alert.alert("Error", "Failed to add attendance");
+    }
+  };
+
+  const handleDeleteMeal = async (item) => {
+    Alert.alert("Delete Meal", `Delete ${item.mealType} record?`, [
+      {
+        text: "Cancel",
+        style: "cancel",
+      },
+
+      {
+        text: "Delete",
+
+        style: "destructive",
+
+        onPress: async () => {
+          try {
+            await deleteDoc(doc(db, "attendance", item.id));
+
+            await setDoc(doc(collection(db, "attendance-history")), {
+              type: "meal_deleted",
+
+              userId,
+
+              mealType: item.mealType,
+
+              amount: item.mealPrice,
+
+              date: item.date,
+
+              createdAt: serverTimestamp(),
+            });
+
+            Alert.alert("Success", "Meal deleted successfully");
+
+            fetchUserDetails();
+          } catch (error) {
+            console.log(error);
+
+            Alert.alert("Error", "Failed to delete meal");
+          }
+        },
+      },
+    ]);
+  };
+
   useEffect(() => {
     fetchUserDetails();
   }, []);
@@ -691,6 +827,15 @@ const IndiUser = () => {
             </View>
           </LinearGradient>
 
+          <View className="px-6 mt-5">
+            <Pressable
+              onPress={() => setShowAddMealModal(true)}
+              className="bg-blue-500 rounded-2xl py-4 items-center"
+            >
+              <Text className="text-white font-bold">+ Add Attendance</Text>
+            </Pressable>
+          </View>
+
           <View className="px-6 mt-8">
             <Text className="text-2xl font-bold text-gray-900">
               User Reports
@@ -829,18 +974,25 @@ const IndiUser = () => {
                     </View>
                   </View>
                 ) : (
-                  <Pressable
-                    onPress={() => {
-                      setEditingId(item.id);
+                  <View className="flex-row mt-5 gap-3">
+                    <Pressable
+                      onPress={() => {
+                        setEditingId(item.id);
 
-                      setNewAmount(String(item.mealPrice));
-                    }}
-                    className="mt-5 bg-pink-500 rounded-2xl py-4 items-center"
-                  >
-                    <Text className="text-white font-bold">
-                      Change Meal Amount
-                    </Text>
-                  </Pressable>
+                        setNewAmount(String(item.mealPrice));
+                      }}
+                      className="flex-1 bg-pink-500 rounded-2xl py-4 items-center"
+                    >
+                      <Text className="text-white font-bold">Edit Meal</Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => handleDeleteMeal(item)}
+                      className="flex-1 bg-red-500 rounded-2xl py-4 items-center"
+                    >
+                      <Text className="text-white font-bold">Delete</Text>
+                    </Pressable>
+                  </View>
                 )}
               </View>
             ))}
@@ -913,6 +1065,80 @@ const IndiUser = () => {
           <View className="h-10" />
         </ScrollView>
       </LinearGradient>
+
+      <Modal visible={showAddMealModal} transparent animationType="slide">
+        <View className="flex-1 bg-black/50 justify-center px-6">
+          <View className="bg-white rounded-3xl p-6">
+            <Text className="text-2xl font-bold mb-5">Add Attendance</Text>
+
+            <TextInput
+              value={mealDate}
+              onChangeText={setMealDate}
+              placeholder="YYYY-MM-DD"
+              className="border border-gray-300 rounded-2xl px-4 py-4 mb-4"
+            />
+
+            <View className="flex-row flex-wrap gap-3 mb-5">
+              {meals.map((meal) => {
+                const selected = selectedMealType === meal.label;
+
+                return (
+                  <Pressable
+                    key={meal.label}
+                    onPress={() => {
+                      setSelectedMealType(meal.label);
+                      setMealPrice(String(meal.price));
+                    }}
+                    className={`flex-row items-center px-4 py-3 rounded-2xl border ${
+                      selected
+                        ? "bg-pink-500 border-pink-500"
+                        : "bg-white border-gray-300"
+                    }`}
+                  >
+                    <MaterialCommunityIcons
+                      name={meal.icon}
+                      size={20}
+                      color={selected ? "#fff" : "#374151"}
+                    />
+
+                    <Text
+                      className={`ml-2 font-semibold capitalize ${
+                        selected ? "text-white" : "text-gray-700"
+                      }`}
+                    >
+                      {meal.label} (₹{meal.price})
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <TextInput
+              value={mealPrice}
+              onChangeText={setMealPrice}
+              keyboardType="numeric"
+              placeholder="Meal Amount"
+              className="border border-gray-300 rounded-2xl px-4 py-4 mb-5"
+            />
+
+            <View className="flex-row gap-3">
+              <Pressable
+                onPress={handleAdminAddMeal}
+                className="flex-1 bg-green-500 rounded-2xl py-4 items-center"
+              >
+                <Text className="text-white font-bold">Save</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setShowAddMealModal(false)}
+                className="flex-1 bg-gray-200 rounded-2xl py-4 items-center"
+              >
+                <Text className="font-bold">Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
